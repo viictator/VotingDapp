@@ -1,36 +1,54 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# 🗳️ Voting DApp with Voter NFTs
 
-## Getting Started
+This project is a decentralized voting system built with **Solidity**, **React**, and **Hardhat**. It allows users to mint a unique "Voter NFT", vote once per day, and receive a proof-of-vote NFT or token in return.
 
-First, run the development server:
+## 📚 Why this project?
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+I'm currently learning **Solidity** and **smart contract development**, and this is my hands-on way to apply everything I'm learning. The goal is to understand how NFTs, voting logic, smart contract restrictions, and frontend integration work in a real-world decentralized application.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+## 🚀 Features
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- ✅ **Mint a Voter NFT** – Each wallet can mint **only one** Voter NFT.
+- ✅ **Vote once per day** – Only Voter NFT holders can vote, and they can do so once every 24 hours.
+- ✅ **Earn a Vote Stamp** – After voting, users receive a "stamp" as proof of participation.
+- ✅ **Voting Status** – See who's winning ("Yes", "No", or "Tied") in real time.
+- ✅ **Frontend Integration** – Connect MetaMask and interact with the contract directly via a clean UI.
+- ✅ **Tests written in Hardhat** – Smart contracts are tested using modern tooling.
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## 🔧 Tech Stack
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Part         | Tech                            |
+|--------------|---------------------------------|
+| Frontend     | React + Vite + TypeScript       |
+| Wallet       | MetaMask                        |
+| Web3 Library | Ethers.js                       |
+| Contracts    | Solidity + Hardhat + OpenZeppelin |
+| NFT Storage  | NFT.Storage / IPFS (optional)   |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## 🧩 Smart Contracts Overview
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### VoterNFT.sol
+- Based on ERC-721
+- Each wallet can only mint **one** NFT
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### VotingSystem.sol
+- Allows voting only if user holds a Voter NFT
+- Enforces **1 vote per 24 hours**
+- Emits events on voting
+- Tracks vote counts and provides leader information
+- Can reward users with a "vote stamp" NFT (optional)
+
+---
+
+## 📦 To Run Locally
+
+1. Clone the repo:
+   ```bash
+   git clone https://github.com/YOUR_USERNAME/voting-dapp.git
+   cd voting-dapp
