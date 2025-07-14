@@ -1,16 +1,20 @@
 async function main() {
-  // Get the ContractFactory for your smart contract (replace 'VoterNFT' later)
+  //Deploy VoterNFT
   const VoterNFT = await ethers.getContractFactory("VoterNFT");
-
-  // Deploy the contract
   console.log("Deploying VoterNFT...");
   const voterNFT = await VoterNFT.deploy();
-
-  // Wait for deployment to finish
   await voterNFT.deployed();
+  console.log("✅ VoterNFT deployed to:", voterNFT.address);
+
+  //Deploy VotingSystem
+  const VotingSystem = await ethers.getContractFactory("VotingSystem");
+  console.log("Deploying VotingSystem...");
+  const votingSystem = await VotingSystem.deploy(voterNFT.address);
+  await votingSystem.deployed();
+  console.log("✅ VotingSystem deployed to:", votingSystem.address);
   
 
-  console.log("✅ VoterNFT deployed to:", voterNFT.address);
+
 }
 
 // We recommend this pattern to catch errors in async/await

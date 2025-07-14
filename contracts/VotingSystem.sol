@@ -8,7 +8,7 @@ contract VotingSystem is Ownable {
     IERC721 public voterNFT;
 
     mapping(address => uint256) public lastVoted;
-    mapping(uint256 => uint256) public votesPerDay; // Unix date => total votes that day
+    mapping(uint256 => uint256) public votesPerDay;
 
     uint256 public yesVotes;
     uint256 public noVotes;
@@ -19,28 +19,20 @@ contract VotingSystem is Ownable {
         voterNFT = IERC721(_voterNFT);
     }
 
-    function vote(bool _voteYes) external {
-        require(voterNFT.balanceOf(msg.sender) > 0, "You must own a VoterNFT to vote.");
+    function vote(bool _vote) external {
+        require(voterNFT.balanceOf(msg.sender) > 0, "You must own a VoterNFT to vote");
 
-        // Enforce 24-hour delay
-        require(
-            block.timestamp > lastVoted[msg.sender] + 1 days,
-            "You can only vote once every 24 hours."
-        );
-
+        //Enforce 24 hour delay
+        require(block.timestamp > lastVoted[msg.sender] + 1 days, "You can only vote once every 24 hours");
         lastVoted[msg.sender] = block.timestamp;
 
-        if (_voteYes) {
-            yesVotes += 1;
+        if (_vote) {
+            yesVotes++;
         } else {
-            noVotes += 1;
+            noVotes++;
         }
 
-        // Store votes per day (optional tracking)
-        uint256 day = block.timestamp / 1 days;
-        votesPerDay[day] += 1;
-
-        emit Voted(msg.sender, _voteYes, block.timestamp);
+        emit Voted(msg.sender, _vote, block.timestamp);
     }
 
     function leadingVote() public view returns (string memory) {
@@ -52,5 +44,7 @@ contract VotingSystem is Ownable {
     function timeUntilNextVote(address user) public view returns (uint256) {
         if (block.timestamp > lastVoted[user] + 1 days) return 0;
         return (lastVoted[user] + 1 days) - block.timestamp;
+        //returns are in seconds
     }
+
 }
