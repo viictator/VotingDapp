@@ -45,10 +45,3 @@ I'm currently learning **Solidity** and **smart contract development**, and this
 - Can reward users with a "vote stamp" NFT (optional)
 
 ---
-
-## 📦 To Run Locally
-
-1. Clone the repo:
-   ```bash
-   git clone https://github.com/YOUR_USERNAME/voting-dapp.git
-   cd voting-dapp
