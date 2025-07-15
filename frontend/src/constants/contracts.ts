@@ -1,5 +1,5 @@
-import VoterNFTJson from "../../../artifacts/contracts/VoterNFT.sol/VoterNFT.json";
-import VotingSystemJson from "../../../artifacts/contracts/VotingSystem.sol/VotingSystem.json";
+import VoterNFTJson from "./abi/VoterNFT.sol/VoterNFT.json";
+import VotingSystemJson from "./abi/VotingSystem.sol/VotingSystem.json";
 
 export const Voter_NFT_ABI = VoterNFTJson.abi;
 export const Voting_System_ABI = VotingSystemJson.abi;
