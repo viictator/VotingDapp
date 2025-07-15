@@ -3,15 +3,15 @@ async function main() {
   const VoterNFT = await ethers.getContractFactory("VoterNFT");
   console.log("Deploying VoterNFT...");
   const voterNFT = await VoterNFT.deploy();
-  await voterNFT.deployed();
-  console.log("✅ VoterNFT deployed to:", voterNFT.address);
+  await voterNFT.waitForDeployment();
+  console.log("✅ VoterNFT deployed to:", voterNFT.target);
 
   //Deploy VotingSystem
   const VotingSystem = await ethers.getContractFactory("VotingSystem");
   console.log("Deploying VotingSystem...");
-  const votingSystem = await VotingSystem.deploy(voterNFT.address);
-  await votingSystem.deployed();
-  console.log("✅ VotingSystem deployed to:", votingSystem.address);
+  const votingSystem = await VotingSystem.deploy(voterNFT.target);
+  await votingSystem.waitForDeployment();
+  console.log("✅ VotingSystem deployed to:", votingSystem.target);
   
 
 

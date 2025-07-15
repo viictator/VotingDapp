@@ -11,6 +11,7 @@ describe("VoterNFT", function () {
     const VoterNFT = await ethers.getContractFactory("VoterNFT");
     [owner, addr1] = await ethers.getSigners();
     voterNFT = await VoterNFT.deploy();
+    
 });
 
 
