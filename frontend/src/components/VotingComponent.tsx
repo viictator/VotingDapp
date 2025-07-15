@@ -1,12 +1,16 @@
-// src/components/VotingComponent.tsx (Adjusted fetchVoteCounts function)
+// src/components/VotingComponent.tsx
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { ethers } from 'ethers';
 import {
   VOTING_SYSTEM_CONTRACT_ADDRESS,
   Voting_System_ABI,
 } from '../constants/contracts';
+
+// IMPORTANT: This MUST match the VOTING_COOLDOWN_PERIOD in your VotingSystem.sol contract.
+// Your contract uses "1 days", which is 86400 seconds.
+const VOTING_COOLDOWN_SECONDS = 24 * 60 * 60; // 86400 seconds
 
 interface VotingComponentProps {
   signer: ethers.Signer;
@@ -18,73 +22,154 @@ export default function VotingComponent({ signer, userAddress }: VotingComponent
 
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [hasVotedToday, setHasVotedToday] = useState(false);
-  const [timeUntilNextVote, setTimeUntilNextVote] = useState<number | null>(null); // In seconds
+
+  // This will store the absolute timestamp (in milliseconds) when the cooldown ends
+  const [voteCooldownEndsAt, setVoteCooldownEndsAt] = useState<number | null>(null);
+  // This is the value displayed, calculated from voteCooldownEndsAt and Date.now()
+  const [displayedTimeRemaining, setDisplayedTimeRemaining] = useState<number | null>(null);
+
   const [yesVotes, setYesVotes] = useState<number | null>(null);
   const [noVotes, setNoVotes] = useState<number | null>(null);
   const [voting, setVoting] = useState(false);
   const [voteError, setVoteError] = useState<string | null>(null);
   const [voteSuccess, setVoteSuccess] = useState(false);
 
-  const votingSystemContract = new ethers.Contract(
+  // Memoize the contract instance to prevent unnecessary re-creations
+  const votingSystemContract = useRef(new ethers.Contract(
     VOTING_SYSTEM_CONTRACT_ADDRESS,
     Voting_System_ABI,
-    signer // Use signer for read operations too, as it provides context
-  );
+    signer
+  )).current;
 
-  // Function to fetch current vote counts
+
+  // Function to fetch current vote counts from the contract
   const fetchVoteCounts = useCallback(async () => {
     try {
-      // **CHANGE THESE LINES:**
-      const currentYesVotes = await votingSystemContract.yesVotes(); // Call the public getter for yesVotes
-      const currentNoVotes = await votingSystemContract.noVotes();   // Call the public getter for noVotes
-
-      setYesVotes(Number(currentYesVotes)); // Convert BigInt to Number
-      setNoVotes(Number(currentNoVotes));   // Convert BigInt to Number
+      const currentYesVotes = await votingSystemContract.yesVotes();
+      const currentNoVotes = await votingSystemContract.noVotes();
+      setYesVotes(Number(currentYesVotes));
+      setNoVotes(Number(currentNoVotes));
+      console.log(`VotingComponent: Fetched votes: Yes=${Number(currentYesVotes)}, No=${Number(currentNoVotes)}`);
     } catch (err: unknown) {
       console.error("Error fetching vote counts:", err);
-      // Handle error, maybe set to null or display a message
     }
-  }, [votingSystemContract]); // Dependency: votingSystemContract
+  }, [votingSystemContract]);
 
-  // Function to check user's voting eligibility
-  const checkVoteStatus = useCallback(async () => {
+  // Function to get the last vote time from the contract and calculate cooldown end
+  const fetchCooldownEndTime = useCallback(async () => {
     if (!signer || !userAddress) {
-      setLoadingStatus(false);
+      // If no wallet connected, ensure cooldown is reset
+      setVoteCooldownEndsAt(null);
+      setHasVotedToday(false);
       return;
     }
 
-    setLoadingStatus(true);
     setVoteError(null);
     try {
-      const timeRemaining = await votingSystemContract.timeUntilNextVote(userAddress);
-      const isEligible = timeRemaining === 0n;
+      // **THE CRUCIAL FIX HERE:** Call `lastVoted` which is your public mapping getter
+      const lastVoteTimeSecondsBigInt = await votingSystemContract.lastVoted(userAddress);
+      const lastVoteTimeSeconds = Number(lastVoteTimeSecondsBigInt); // This is a blockchain timestamp
 
-      setHasVotedToday(!isEligible);
-      setTimeUntilNextVote(Number(timeRemaining));
+      let calculatedCooldownEndsAt: number | null = null;
+      let userHasRecentlyVoted = false;
 
-      await fetchVoteCounts(); // Also fetch vote counts when checking status
+      if (lastVoteTimeSeconds === 0) {
+        // User has never voted or cooldown is long past
+        userHasRecentlyVoted = false;
+      } else {
+        // Calculate the absolute end time of the cooldown period
+        // Convert blockchain seconds to JS milliseconds for comparison with Date.now()
+        const cooldownEndTimeBlockchainSeconds = lastVoteTimeSeconds + VOTING_COOLDOWN_SECONDS;
+        calculatedCooldownEndsAt = cooldownEndTimeBlockchainSeconds * 1000; // Convert to milliseconds
+
+        // Check if current client time is past the blockchain cooldown end time
+        if (Date.now() < calculatedCooldownEndsAt) {
+          userHasRecentlyVoted = true; // Still in cooldown
+        } else {
+          userHasRecentlyVoted = false; // Cooldown expired
+          calculatedCooldownEndsAt = 0; // Set to 0 if expired for clarity
+        }
+      }
+
+      setVoteCooldownEndsAt(calculatedCooldownEndsAt); // Update the state
+      setHasVotedToday(userHasRecentlyVoted);
+      console.log(`VotingComponent: lastVoted from contract: ${lastVoteTimeSeconds}s, calculated cooldown ends at: ${calculatedCooldownEndsAt}ms`);
 
     } catch (err: unknown) {
-      console.error("Error checking vote status:", err);
-      let errorMessage = 'Failed to check voting status.';
+      console.error("Error fetching cooldown end time:", err);
+      let errorMessage = 'Failed to fetch voting cooldown status.';
       if (typeof err === 'object' && err !== null && 'message' in err && typeof (err as any).message === 'string') {
           errorMessage = (err as any).message;
       }
       setVoteError(errorMessage);
-    } finally {
-      setLoadingStatus(false);
+      setVoteCooldownEndsAt(0); // Reset cooldown on error
+      setHasVotedToday(false); // Assume not voted or error
     }
-  }, [signer, userAddress, votingSystemContract, fetchVoteCounts]);
+  }, [signer, userAddress, votingSystemContract]);
 
+  // Combined function to initialize and refresh all relevant data
+  const initializeVotingData = useCallback(async () => {
+    setLoadingStatus(true);
+    await fetchCooldownEndTime(); // Fetch initial cooldown status
+    await fetchVoteCounts();     // Fetch initial vote counts
+    setLoadingStatus(false);
+  }, [fetchCooldownEndTime, fetchVoteCounts]);
+
+
+  // Effect for initial load and re-syncing vote counts periodically
   useEffect(() => {
-    checkVoteStatus();
+    console.log("VotingComponent: Initial data fetch and setting up vote count sync interval.");
+    initializeVotingData(); // Initial comprehensive data fetch on mount
 
-    const interval = setInterval(() => {
-      checkVoteStatus();
-    }, 15000);
+    const voteCountSyncInterval = setInterval(() => {
+      console.log("VotingComponent: Re-syncing vote counts...");
+      fetchVoteCounts(); // Only fetch vote counts periodically, NOT cooldown time aggressively
+    }, 15000); // Sync vote counts every 15 seconds
 
-    return () => clearInterval(interval);
-  }, [checkVoteStatus]);
+    // Cleanup for intervals
+    return () => clearInterval(voteCountSyncInterval);
+  }, [initializeVotingData, fetchVoteCounts]);
+
+
+  // Effect for the client-side 1-second countdown
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+
+    if (voteCooldownEndsAt !== null && voteCooldownEndsAt > Date.now()) {
+      // Start the countdown if there's a future end time
+      console.log("VotingComponent: Starting client-side countdown interval.");
+      // Set initial displayed time immediately to avoid a 1-second delay
+      setDisplayedTimeRemaining(Math.max(0, Math.floor((voteCooldownEndsAt - Date.now()) / 1000)));
+
+      intervalId = setInterval(() => {
+        const remaining = Math.max(0, Math.floor((voteCooldownEndsAt - Date.now()) / 1000));
+        setDisplayedTimeRemaining(remaining);
+
+        if (remaining <= 0) {
+          if (intervalId) clearInterval(intervalId);
+          intervalId = null;
+          console.log("VotingComponent: Client-side countdown reached zero, re-fetching cooldown status.");
+          fetchCooldownEndTime(); // Re-fetch cooldown from contract to confirm eligibility
+        }
+      }, 1000); // Decrement every second
+    } else {
+      // If no cooldown, or it's in the past, ensure displayed time is 0 and no interval runs
+      setDisplayedTimeRemaining(0);
+      if (intervalId) { // Ensure any existing interval is cleared
+          clearInterval(intervalId);
+          intervalId = null;
+      }
+    }
+
+    // Cleanup function: This runs when the component unmounts OR when dependencies change
+    return () => {
+      if (intervalId) {
+        console.log("VotingComponent: Cleaning up client-side countdown interval.");
+        clearInterval(intervalId);
+      }
+    };
+  }, [voteCooldownEndsAt, fetchCooldownEndTime]); // Re-run this effect when voteCooldownEndsAt changes
+
 
   const handleVote = async (voteChoice: boolean) => {
     setVoting(true);
@@ -100,7 +185,9 @@ export default function VotingComponent({ signer, userAddress }: VotingComponent
       setVoteSuccess(true);
       console.log("Vote cast successfully! Transaction confirmed:", tx.hash);
 
-      await checkVoteStatus();
+      // After a successful vote, immediately re-sync the cooldown and vote counts
+      // This will update the vote counts and restart the cooldown timer correctly.
+      initializeVotingData();
 
     } catch (err: unknown) {
       console.error("Voting error:", err);
@@ -130,7 +217,8 @@ export default function VotingComponent({ signer, userAddress }: VotingComponent
     }
   };
 
-  const formatTime = (seconds: number) => {
+  const formatTime = (seconds: number | null) => {
+    if (seconds === null || seconds <= 0) return "0h 0m 0s";
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
@@ -148,9 +236,9 @@ export default function VotingComponent({ signer, userAddress }: VotingComponent
       {hasVotedToday ? (
         <div className="text-center">
           <p className="text-yellow-400 text-lg">You have already cast your vote for today.</p>
-          {timeUntilNextVote !== null && timeUntilNextVote > 0 ? (
+          {displayedTimeRemaining !== null && displayedTimeRemaining > 0 ? (
             <p className="text-gray-400 text-md mt-2">
-              Next vote available in: {formatTime(timeUntilNextVote)}
+              Next vote available in: {formatTime(displayedTimeRemaining)}
             </p>
           ) : (
             <p className="text-green-400 text-md mt-2">
@@ -195,7 +283,6 @@ export default function VotingComponent({ signer, userAddress }: VotingComponent
         </p>
       )}
 
-      {/* Display current vote counts - this can be moved to a separate component later */}
       <div className="mt-8 pt-6 border-t border-gray-700 w-full text-center">
         <h4 className="text-xl font-semibold mb-2">Current Vote Counts:</h4>
         <p className="text-green-400">Yes Votes: {yesVotes !== null ? yesVotes : 'Loading...'}</p>
