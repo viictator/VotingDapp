@@ -10,174 +10,233 @@ interface ConnectWalletProps {
 }
 
 export default function ConnectWallet({ onConnect, onDisconnect }: ConnectWalletProps) {
-  const [currentAccount, setCurrentAccount] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const sepoliaChainId = "0xaa36a7"; // Sepolia chain ID in hex (11155111 in decimal)
 
+  // Explicitly check for window.ethereum on load outside of effects for immediate render logic
+  const hasMetaMask = typeof window !== 'undefined' && (window as any).ethereum;
+
   // Function to handle account changes from MetaMask
-  const handleAccountsChanged = useCallback((accounts: string[]) => {
+  const handleAccountsChanged = useCallback(async (accounts: string[]) => {
     if (accounts.length === 0) {
       console.log("MetaMask: No accounts found. User disconnected or locked.");
-      setCurrentAccount(null);
       setError("Wallet disconnected. Please connect to MetaMask.");
       onDisconnect?.();
-    } else if (accounts[0] !== currentAccount) {
+    } else {
       console.log("MetaMask: Account changed to", accounts[0]);
-      setCurrentAccount(accounts[0]);
       setError(null);
-      connectWallet(); // Re-trigger connection logic to update provider/signer
+      // Attempt to re-establish full connection details for parent if MetaMask is available
+      if (hasMetaMask) {
+        try {
+          const provider = new ethers.BrowserProvider((window as any).ethereum);
+          const signer = await provider.getSigner();
+          onConnect(accounts[0], provider, signer);
+        } catch (err: any) {
+          console.error("Error re-connecting on account change:", err);
+          setError(`Failed to reconnect on account change: ${err.message || 'An unknown error occurred'}`);
+          onDisconnect?.(); // Ensure parent state is cleared on re-connection failure
+        }
+      }
     }
-  }, [currentAccount, onDisconnect]); // Fixed dependency: currentAccount and onDisconnect are correct here
+  }, [hasMetaMask, onConnect, onDisconnect]);
 
   // Function to handle network (chain) changes from MetaMask
-  const handleChainChanged = useCallback((chainId: string) => {
+  const handleChainChanged = useCallback(async (chainId: string) => {
     console.log("MetaMask: Chain changed to", chainId);
     if (chainId !== sepoliaChainId) {
       setError(`Please switch MetaMask to the Sepolia network (Chain ID: ${parseInt(sepoliaChainId, 16)}).`);
-      setCurrentAccount(null);
-      onDisconnect?.();
+      onDisconnect?.(); // Disconnect if on wrong network
     } else {
       setError(null);
-      connectWallet(); // Reconnect to get the correct provider/signer for the new chain
+      // If chain switched back to Sepolia, attempt to re-connect if an account is already authorized
+      if (hasMetaMask) {
+        try {
+          const accounts = await (window as any).ethereum.request({ method: "eth_accounts" });
+          if (accounts.length > 0) {
+            const provider = new ethers.BrowserProvider((window as any).ethereum);
+            const signer = await provider.getSigner();
+            onConnect(accounts[0], provider, signer);
+          } else {
+            // No accounts authorized after switching back, clear any network error
+            setError(null);
+          }
+        } catch (err: any) {
+          console.error("Error re-connecting on chain change:", err);
+          setError(`Failed to reconnect on chain change: ${err.message || 'An unknown error occurred'}`);
+          onDisconnect?.(); // Ensure parent state is cleared on re-connection failure
+        }
+      }
     }
-  }, [onDisconnect, sepoliaChainId]);
+  }, [hasMetaMask, onConnect, onDisconnect, sepoliaChainId]);
 
-  // Main function to connect to MetaMask
-  const connectWallet = useCallback(async () => { // <--- Added useCallback here
+  // Main function to connect to MetaMask (called by button click)
+  const connectWallet = useCallback(async () => {
     try {
-      const { ethereum } = window; // No more 'as any'
+      const ethereum = (window as any).ethereum;
 
       if (!ethereum) {
+        // This case should ideally be caught by initial hasMetaMask check, but safety net
         setError("MetaMask is not installed. Please install it to use this dApp.");
         return;
       }
+
+      // Request accounts first (prompts user if not already connected)
+      const accounts = await ethereum.request({ method: "eth_requestAccounts" });
+
+      if (accounts.length === 0) {
+        setError("No accounts selected by the user in MetaMask.");
+        return;
+      }
+
+      const account = accounts[0];
+      console.log("MetaMask Requested Accounts:", account);
 
       // Check current chain ID
       const chainId = await ethereum.request({ method: 'eth_chainId' });
       if (chainId !== sepoliaChainId) {
         setError(`Please switch MetaMask to the Sepolia network (Chain ID: ${parseInt(sepoliaChainId, 16)}).`);
         try {
-            await ethereum.request({
-                method: 'wallet_switchEthereumChain',
-                params: [{ chainId: sepoliaChainId }],
-            });
-            setError(null);
-        } catch (switchError: any) { // Keep any here for unknown error object structure
-            if (switchError.code === 4902) {
-                setError("Sepolia network not found in MetaMask. Please add it.");
-            } else if (switchError.code === 4001) {
-                setError("User rejected network switch. Please connect to Sepolia.");
-            } else {
-                setError(`Failed to switch to Sepolia network: ${switchError.message}`);
-            }
-            setCurrentAccount(null);
-            return;
+          await ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: sepoliaChainId }],
+          });
+          // If successful switch, the 'chainChanged' event listener will trigger handleChainChanged
+          // which will then call onConnect if an account is connected.
+          setError(null); // Clear the error as switch attempt was made
+        } catch (switchError: any) {
+          if (switchError.code === 4902) {
+            setError("Sepolia network not found in MetaMask. Please add it.");
+          } else if (switchError.code === 4001) {
+            setError("User rejected network switch. Please connect to Sepolia.");
+          } else {
+            setError(`Failed to switch to Sepolia network: ${switchError.message}`);
+          }
+          onDisconnect?.(); // Ensure parent state is cleared if switch fails
+          return; // Stop here if network switch fails
         }
+      } else {
+        // If accounts are selected AND chain is correct, proceed to connect
+        const provider = new ethers.BrowserProvider(ethereum);
+        const signer = await provider.getSigner();
+        onConnect(account, provider, signer); // Inform parent about successful connection
+        setError(null); // Clear any previous errors
       }
 
-      const accounts = await ethereum.request({ method: "eth_requestAccounts" });
-
-      if (accounts.length === 0) {
-        setError("No accounts selected by the user in MetaMask.");
-        setCurrentAccount(null);
-        return;
-      }
-
-      const account = accounts[0];
-      setCurrentAccount(account);
-      setError(null);
-      console.log("MetaMask Connected:", account);
-
-      const provider = new ethers.BrowserProvider(ethereum);
-      const signer = await provider.getSigner();
-
-      onConnect(account, provider, signer);
-
-    } catch (err: any) { // Keep any here for unknown error object structure
+    } catch (err: any) {
       console.error("MetaMask connection error:", err);
       if (err.code === 4001) {
         setError("Connection rejected. Please approve in MetaMask to use the dApp.");
       } else {
         setError(`Failed to connect: ${err.message || 'An unknown error occurred'}`);
       }
-      setCurrentAccount(null);
+      onDisconnect?.(); // Clear parent state on connection failure
     } finally {
       setIsLoading(false);
     }
-  }, [onConnect, onDisconnect, sepoliaChainId, currentAccount]); // Added useCallback deps
+  }, [onConnect, onDisconnect, sepoliaChainId]);
 
-  // Check wallet connection status on component mount
+
+  // Effect to check initial connection status and setup/cleanup listeners
   useEffect(() => {
-    const checkConnectionAndSetupListeners = async () => {
-        setIsLoading(true);
-        if (typeof window !== 'undefined' && window.ethereum) {
-            const { ethereum } = window; // No more 'as any'
-            try {
-                const accounts = await ethereum.request({ method: "eth_accounts" });
-                if (accounts.length > 0) {
-                    const chainId = await ethereum.request({ method: 'eth_chainId' });
-                    if (chainId === sepoliaChainId) {
-                        setCurrentAccount(accounts[0]);
-                        setError(null);
-                        const provider = new ethers.BrowserProvider(ethereum);
-                        const signer = await provider.getSigner();
-                        onConnect(accounts[0], provider, signer);
-                        console.log("Auto-connected to MetaMask on Sepolia:", accounts[0]);
-                    } else {
-                        setError(`MetaMask connected but on wrong network. Please switch to Sepolia (Chain ID: ${parseInt(sepoliaChainId, 16)}).`);
-                        setCurrentAccount(null);
-                    }
-                } else {
-                    setCurrentAccount(null);
-                    console.log("No authorized accounts found on load.");
-                }
-
-                ethereum.on('accountsChanged', handleAccountsChanged);
-                ethereum.on('chainChanged', handleChainChanged);
-
-            } catch (err: any) { // Keep any here for unknown error object structure
-                console.error("Error checking initial connection:", err);
-                setError(`Error during initial wallet check: ${err.message}`);
-                setCurrentAccount(null);
+    const checkInitialConnection = async () => {
+      setIsLoading(true);
+      if (hasMetaMask) {
+        const ethereum = (window as any).ethereum;
+        try {
+          // Check if accounts are already connected (eth_accounts does not prompt user)
+          const accounts = await ethereum.request({ method: "eth_accounts" });
+          if (accounts.length > 0) {
+            const chainId = await ethereum.request({ method: 'eth_chainId' });
+            if (chainId === sepoliaChainId) {
+              const provider = new ethers.BrowserProvider(ethereum);
+              const signer = await provider.getSigner();
+              onConnect(accounts[0], provider, signer); // Call parent if already connected
+              setError(null);
+              console.log("Auto-connected to MetaMask on Sepolia:", accounts[0]);
+            } else {
+              setError(`MetaMask connected but on wrong network. Please switch to Sepolia (Chain ID: ${parseInt(sepoliaChainId, 16)}).`);
+              onDisconnect?.(); // Disconnect parent if wrong network
             }
-        } else {
-            setError("MetaMask is not installed. Please install it to use this dApp.");
-            setCurrentAccount(null);
+          } else {
+            // No accounts authorized initially, clear any previous errors
+            setError(null);
+          }
+
+          // Setup listeners
+          ethereum.on('accountsChanged', handleAccountsChanged);
+          ethereum.on('chainChanged', handleChainChanged);
+
+        } catch (err: any) {
+          console.error("Error during initial wallet check:", err);
+          setError(`Error during initial wallet check: ${err.message || 'An unknown error occurred'}`);
+          onDisconnect?.(); // Disconnect parent on initial check failure
         }
-        setIsLoading(false);
+      } else {
+        // MetaMask is not installed, set specific error from Figma
+        setError("MetaMask is not installed. Please install it to use this dApp.");
+      }
+      setIsLoading(false);
     };
 
-    checkConnectionAndSetupListeners();
+    checkInitialConnection();
 
+    // Cleanup listeners on component unmount
     return () => {
-      if (typeof window !== 'undefined' && window.ethereum) {
-        window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
-        window.ethereum.removeListener('chainChanged', handleChainChanged);
+      if (hasMetaMask) {
+        const ethereum = (window as any).ethereum;
+        ethereum.removeListener('accountsChanged', handleAccountsChanged);
+        ethereum.removeListener('chainChanged', handleChainChanged);
       }
     };
-  }, [handleAccountsChanged, handleChainChanged, onConnect, sepoliaChainId]); // Dependencies for useEffect
+  }, [hasMetaMask, sepoliaChainId, handleAccountsChanged, handleChainChanged, onConnect, onDisconnect]); // Added onDisconnect to deps
 
   if (isLoading) {
-    return <div className="text-white text-center">Loading wallet status...</div>;
+    return <div className="text-gray-600 text-center">Loading wallet status...</div>;
   }
 
+  // Render logic for the "Connect Wallet" page (Page 1)
   return (
     <div className="flex flex-col items-center justify-center p-4">
-      {currentAccount ? (
-        <div className="text-green-400 text-lg">
-          Connected: {currentAccount.substring(0, 6)}...{currentAccount.substring(currentAccount.length - 4)}
-        </div>
-      ) : (
+      {/* "Connect your MetaMask wallet to begin." text */}
+      {/* This text should only show if MetaMask is installed and no *critical* error prevents trying to connect */}
+      
+
+      {/* Connect Wallet Button */}
+      {/* Show button if MetaMask is installed AND not currently in a state where a connection is active (handled by parent rendering)
+          OR if there's an error that can be resolved by clicking the button (e.g., user rejected, wrong network) */}
+      {hasMetaMask && (!error || error.includes("User rejected network switch") || error.includes("Connection rejected. Please approve")) && (
         <button
           onClick={connectWallet}
-          className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+          // Tailwind classes for button styling, combined with inline style for gradient border effect
+          className="group relative inline-flex items-center cursor-pointer justify-center p-0.5 mb-2 me-2 overflow-hidden text-sm font-medium rounded-lg border-none outline-none shadow-none focus:ring-4 focus:outline-none focus:ring-blue-300"
+          
         >
-          Connect MetaMask
+          <span
+            // This inner span forms the white background of the button
+            className="relative px-8 py-3 transition-all ease-in duration-75 bg-gradient-to-r from-blue-200 to-blue-800 rounded-md group-hover:bg-opacity-90"
+          >
+            <span
+              // This span holds the actual text with the gradient fill
+              className="text-lg font-bold bg-clip-text text-white"
+              
+            >
+              CONNECT WALLET
+            </span>
+          </span>
         </button>
       )}
 
-      {error && <p className="text-red-500 mt-2">{error}</p>}
+      {hasMetaMask && !(error && error.includes("MetaMask is not installed")) && (
+        <p className="text-gray-600 mb-6 text-center text-lg mt-4">Connect your MetaMask wallet to begin.</p>
+      )}
+
+      {/* Error messages */}
+      {error && (
+        <p className="text-red-500 mt-4 text-center text-base">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
