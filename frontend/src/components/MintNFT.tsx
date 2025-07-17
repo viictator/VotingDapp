@@ -1,14 +1,14 @@
 // src/components/MintNFT.tsx (Modified)
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { ethers } from 'ethers';
 import { VOTER_NFT_CONTRACT_ADDRESS, Voter_NFT_ABI } from '../constants/contracts';
 
 interface MintNFTProps {
   signer: ethers.Signer;
   userAddress: string;
-  onNFTStatusChecked: (hasNFT: boolean) => void; // This prop is crucial
+  onNFTStatusChecked: (hasNFT: boolean) => void;
 }
 
 export default function MintNFT({ signer, userAddress, onNFTStatusChecked }: MintNFTProps) {
@@ -18,11 +18,26 @@ export default function MintNFT({ signer, userAddress, onNFTStatusChecked }: Min
   const [hasVotedNFT, setHasVotedNFT] = useState<boolean | null>(null);
   const [checkingEligibility, setCheckingEligibility] = useState(true);
 
+  // Memoize the contract instance for eligibility checks (signer.provider)
+  const voterNFTContractRead = useRef(new ethers.Contract(
+    VOTER_NFT_CONTRACT_ADDRESS,
+    Voter_NFT_ABI,
+    signer.provider // Use provider for read-only calls
+  )).current;
+
+  // Memoize the contract instance for minting (signer)
+  const voterNFTContractWrite = useRef(new ethers.Contract(
+    VOTER_NFT_CONTRACT_ADDRESS,
+    Voter_NFT_ABI,
+    signer // Use signer for state-changing calls
+  )).current;
+
+
   const checkEligibility = useCallback(async () => {
     if (!signer || !userAddress) {
       setHasVotedNFT(null);
       setCheckingEligibility(false);
-      onNFTStatusChecked(false); // Call callback immediately if not connected
+      onNFTStatusChecked(false);
       return;
     }
 
@@ -30,16 +45,10 @@ export default function MintNFT({ signer, userAddress, onNFTStatusChecked }: Min
     setMintError(null);
 
     try {
-      const voterNFTContract = new ethers.Contract(
-        VOTER_NFT_CONTRACT_ADDRESS,
-        Voter_NFT_ABI,
-        signer.provider
-      );
-
-      const mintedStatus: boolean = await voterNFTContract.hasMinted(userAddress);
+      const mintedStatus: boolean = await voterNFTContractRead.hasMinted(userAddress);
       setHasVotedNFT(mintedStatus);
-      onNFTStatusChecked(mintedStatus); // <-- THIS IS THE LINE THAT RELAYS THE STATUS
-      console.log(`User ${userAddress} has minted NFT: ${mintedStatus}`); // This is your confirmation log
+      onNFTStatusChecked(mintedStatus);
+      console.log(`User ${userAddress} has minted NFT: ${mintedStatus}`);
 
     } catch (err: unknown) {
       console.error("Error checking NFT eligibility:", err);
@@ -51,11 +60,11 @@ export default function MintNFT({ signer, userAddress, onNFTStatusChecked }: Min
       }
       setMintError(errorMessage);
       setHasVotedNFT(null);
-      onNFTStatusChecked(false); // Call callback with false on error
+      onNFTStatusChecked(false);
     } finally {
       setCheckingEligibility(false);
     }
-  }, [signer, userAddress, onNFTStatusChecked]); // <-- ADD onNFTStatusChecked HERE
+  }, [signer, userAddress, onNFTStatusChecked, voterNFTContractRead]);
 
   useEffect(() => {
     checkEligibility();
@@ -67,21 +76,15 @@ export default function MintNFT({ signer, userAddress, onNFTStatusChecked }: Min
     setMintSuccess(false);
 
     try {
-      const voterNFTContractWithSigner = new ethers.Contract(
-        VOTER_NFT_CONTRACT_ADDRESS,
-        Voter_NFT_ABI,
-        signer
-      );
-
       console.log("Attempting to mint NFT...");
-      const tx = await voterNFTContractWithSigner.mint();
+      const tx = await voterNFTContractWrite.mint();
       console.log("Transaction sent:", tx.hash);
 
       await tx.wait();
       setMintSuccess(true);
       console.log("NFT Minted successfully! Transaction confirmed:", tx.hash);
 
-      await checkEligibility(); // This will now correctly trigger onNFTStatusChecked again
+      await checkEligibility();
 
     } catch (err: unknown) {
       console.error("Minting error:", err);
@@ -110,34 +113,48 @@ export default function MintNFT({ signer, userAddress, onNFTStatusChecked }: Min
   };
 
   return (
-    <div className="flex flex-col items-center justify-center p-4">
-      <p className="text-gray-300 mb-4 text-center">
-        Connected Address: {userAddress.substring(0, 6)}...{userAddress.substring(userAddress.length - 4)}
+    // Added max-w-xl and mx-auto for centering and consistent width
+    <div className="flex flex-col items-center justify-center p-4 max-w-xl mx-auto">
+      {/* CONNECTED Headline */}
+      <h1 className="text-5xl md:text-6xl font-extrabold bg-gradient-to-r from-blue-200 to-blue-800 bg-clip-text text-transparent m-0 text-center mb-2">
+        CONNECTED
+      </h1>
+      {/* User Address */}
+      <p className="text-blue-300 text-lg mb-8">
+        {userAddress.substring(0, 6)}...{userAddress.substring(userAddress.length - 4)}
       </p>
 
+      {/* Conditional Rendering based on eligibility */}
       {checkingEligibility ? (
-        <p className="text-blue-400">Checking NFT eligibility...</p>
-      ) : hasVotedNFT === true ? (
-        <p className="text-green-500 text-lg font-semibold">
-          You're eligible to vote! (Voter NFT Owned)
-        </p>
-      ) : (
+        <p className="text-blue-400 text-lg">Checking NFT eligibility...</p>
+      ) : hasVotedNFT === false ? (
+        // Show minting UI if NFT is NOT owned
         <>
-          <p className="text-yellow-300 mb-4 text-center">
-            You don't own a Voter NFT. Mint one to become eligible.
-          </p>
           <button
             onClick={handleMint}
-            className={`bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded ${
+            className={`group relative inline-flex items-center cursor-pointer justify-center p-0.5 mb-2 me-2 overflow-hidden text-sm font-medium rounded-lg border-none outline-none shadow-none focus:ring-4 focus:outline-none focus:ring-blue-300 ${
               minting ? 'opacity-50 cursor-not-allowed' : ''
             }`}
             disabled={minting}
           >
-            {minting ? 'Minting NFT...' : 'Mint Your Voter NFT'}
+            <span
+              className="relative px-10 py-4 transition text-lg uppercase duration-300 ease-in-out bg-gradient-to-r text-white from-blue-200 to-blue-800 rounded-md group-hover:brightness-110 font-bold"
+            >
+              {minting ? 'Minting NFT...' : 'Mint nft'}
+            </span>
           </button>
+          {/* New text message below the button */}
+          <p className="text-gray-400 text-lg mt-8 text-center">
+            Mint the NFT to start using the dApp.
+          </p>
         </>
+      ) : (
+        // If hasVotedNFT is true, render nothing specific from this component
+        // The parent component (App.tsx) will handle rendering the next stage of the UI.
+        <></>
       )}
 
+      {/* Error and Success Messages */}
       {mintError && (
         <p className="text-red-500 mt-2 text-center break-words max-w-full">
           Error: {mintError}

@@ -198,6 +198,14 @@ export default function ConnectWallet({ onConnect, onDisconnect }: ConnectWallet
   // Render logic for the "Connect Wallet" page (Page 1)
   return (
     <div className="flex flex-col items-center justify-center p-4">
+      <div className="flex flex-col justify-center items-center mb-8">
+        <h1
+          className="text-4xl md:text-5xl lg:text-6xl font-extrabold bg-gradient-to-r from-blue-200 to-blue-800 bg-clip-text text-transparent m-0"
+        >
+          VOTING DAPP
+        </h1>
+        <p className="m-0 text-lg bg-gradient-to-r from-blue-200 to-blue-800 bg-clip-text text-transparent">ON SEPOLIA NETWORK</p>
+      </div>
       {/* "Connect your MetaMask wallet to begin." text */}
       {/* This text should only show if MetaMask is installed and no *critical* error prevents trying to connect */}
       
@@ -207,24 +215,16 @@ export default function ConnectWallet({ onConnect, onDisconnect }: ConnectWallet
           OR if there's an error that can be resolved by clicking the button (e.g., user rejected, wrong network) */}
       {hasMetaMask && (!error || error.includes("User rejected network switch") || error.includes("Connection rejected. Please approve")) && (
         <button
-          onClick={connectWallet}
-          // Tailwind classes for button styling, combined with inline style for gradient border effect
-          className="group relative inline-flex items-center cursor-pointer justify-center p-0.5 mb-2 me-2 overflow-hidden text-sm font-medium rounded-lg border-none outline-none shadow-none focus:ring-4 focus:outline-none focus:ring-blue-300"
-          
-        >
-          <span
-            // This inner span forms the white background of the button
-            className="relative px-8 py-3 transition-all ease-in duration-75 bg-gradient-to-r from-blue-200 to-blue-800 rounded-md group-hover:bg-opacity-90"
-          >
-            <span
-              // This span holds the actual text with the gradient fill
-              className="text-lg font-bold bg-clip-text text-white"
-              
-            >
-              CONNECT WALLET
-            </span>
-          </span>
-        </button>
+  onClick={connectWallet}
+  className="group relative inline-flex items-center cursor-pointer justify-center p-0.5 mb-2 me-2 overflow-hidden text-sm font-medium rounded-lg border-none outline-none shadow-none focus:ring-4 focus:outline-none focus:ring-blue-300"
+>
+  <span
+    className="relative px-10 py-4 transition duration-300 ease-in-out bg-gradient-to-r text-white text-lg from-blue-200 to-blue-800 rounded-md group-hover:brightness-110 font-bold"
+  >
+    CONNECT WALLET
+  </span>
+</button>
+
       )}
 
       {hasMetaMask && !(error && error.includes("MetaMask is not installed")) && (

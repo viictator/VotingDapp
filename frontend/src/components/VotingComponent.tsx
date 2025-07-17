@@ -1,4 +1,4 @@
-// src/components/VotingComponent.tsx
+/* // src/components/VotingComponent.tsx
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -17,7 +17,7 @@ interface VotingComponentProps {
   userAddress: string;
 }
 
-export default function VotingComponent({ signer, userAddress }: VotingComponentProps) {
+export default function       VotingComponent({ signer, userAddress }: VotingComponentProps) {
   const arbitraryQuestion = "Should the dApp introduce a new governance token?";
 
   const [loadingStatus, setLoadingStatus] = useState(true);
@@ -235,7 +235,6 @@ export default function VotingComponent({ signer, userAddress }: VotingComponent
 
       {hasVotedToday ? (
         <div className="text-center">
-          <p className="text-yellow-400 text-lg">You have already cast your vote for today.</p>
           {displayedTimeRemaining !== null && displayedTimeRemaining > 0 ? (
             <p className="text-gray-400 text-md mt-2">
               Next vote available in: {formatTime(displayedTimeRemaining)}
@@ -290,4 +289,4 @@ export default function VotingComponent({ signer, userAddress }: VotingComponent
       </div>
     </div>
   );
-}
+} */
