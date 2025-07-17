@@ -198,7 +198,7 @@ export default function Home() {
   }
 
   return (
-    <main className={`flex min-h-screen flex-col items-center justify-center p-8 bg-[#F9F9F9] text-gray-800 ${inter.className}`}>
+    <main className={`flex min-h-screen flex-col items-center justify-center p-8 bg-gradient-to-r from-slate-50 to-slate-100 text-gray-800 ${inter.className}`}>
       {/* This div is now transparent and no longer has the connected address text */}
       <div className="w-full max-w-4xl"> 
         {currentFlowComponent}
