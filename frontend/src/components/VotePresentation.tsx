@@ -77,7 +77,8 @@ export default function VotePresentation({ signer, userAddress, onVoteCast }: Vo
   const baseButtonClasses = `group relative inline-flex items-center justify-center p-0.5 overflow-hidden text-lg font-medium rounded-lg border-none outline-none shadow-none focus:ring-4 focus:outline-none cursor-pointer`;
 
   // Common inner <span> classes for the gradient effect
-  const baseSpanClasses = `relative px-12 py-4 transition duration-300 ease-in-out bg-gradient-to-r text-white from-blue-200 to-blue-800 rounded-md group-hover:brightness-110 font-bold`;
+  const baseSpanClasses1 = `relative px-12 py-4 transition duration-300 ease-in-out bg-gradient-to-r text-white from-blue-200 to-blue-500 rounded-md group-hover:brightness-110 font-bold`;
+  const baseSpanClasses2 = `relative px-12 py-4 transition duration-300 ease-in-out bg-gradient-to-r text-white from-blue-500 to-blue-800 rounded-md group-hover:brightness-110 font-bold`;
 
 
   return (
@@ -100,7 +101,7 @@ export default function VotePresentation({ signer, userAddress, onVoteCast }: Vo
           disabled={voting}
         >
           <span
-            className={baseSpanClasses}
+            className={baseSpanClasses1}
           >
             YES
           </span>
@@ -116,7 +117,7 @@ export default function VotePresentation({ signer, userAddress, onVoteCast }: Vo
           disabled={voting}
         >
           <span
-            className={baseSpanClasses}
+            className={baseSpanClasses2}
           >
             NO
           </span>

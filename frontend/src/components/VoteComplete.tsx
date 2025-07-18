@@ -125,7 +125,7 @@ export default function VoteComplete({ signer, userAddress, voteCooldownEndsAt, 
       </h1>
 
       {/* New Vote Bar Design */}
-      <div className="relative w-full h-16 rounded-lg overflow-hidden bg-gradient-to-r from-blue-200 to-blue-800 flex items-center mt-6 mb-2">
+      <div className="relative w-full h-14 rounded-lg overflow-hidden bg-gradient-to-r from-blue-200 to-blue-800 flex items-center mt-6 mb-2">
         {/* YES Section (dynamically sized) */}
         <div
           className="h-full flex items-center pl-4 font-bold text-xl"
