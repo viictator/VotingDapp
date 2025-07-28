@@ -12,7 +12,6 @@ I'm currently learning **Solidity** and **smart contract development**, and this
 
 - ✅ **Mint a Voter NFT** – Each wallet can mint **only one** Voter NFT.
 - ✅ **Vote once per day** – Only Voter NFT holders can vote, and they can do so once every 24 hours.
-- ✅ **Earn a Vote Stamp** – After voting, users receive a "stamp" as proof of participation.
 - ✅ **Voting Status** – See who's winning ("Yes", "No", or "Tied") in real time.
 - ✅ **Frontend Integration** – Connect MetaMask and interact with the contract directly via a clean UI.
 - ✅ **Tests written in Hardhat** – Smart contracts are tested using modern tooling.
